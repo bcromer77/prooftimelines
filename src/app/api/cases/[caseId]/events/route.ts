@@ -1,10 +1,12 @@
 // src/app/api/cases/[caseId]/events/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { ObjectId } from "mongodb";
 
 import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/apiAuth";
 import { EventCreateSchema } from "@/lib/validators";
+
+type RouteContext = { params: Promise<{ caseId: string }> };
 
 function toObjectId(id: string) {
   return ObjectId.isValid(id) ? new ObjectId(id) : null;
@@ -16,16 +18,15 @@ function parseISO(value: unknown) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { caseId: string } }
-) {
+export async function POST(req: NextRequest, { params }: RouteContext) {
+  const { caseId: caseIdParam } = await params;
+
   // 1) Auth
   const auth = await requireUserId(req);
   if (!auth.ok) return auth.response;
 
   // 2) Validate caseId
-  const caseId = toObjectId(params.caseId);
+  const caseId = toObjectId(caseIdParam);
   if (!caseId) {
     return NextResponse.json({ error: "INVALID_CASE_ID" }, { status: 400 });
   }
@@ -44,7 +45,7 @@ export async function POST(
     );
   }
 
-  // 4) Convert occurredAt safely (prevent Invalid Date inserts)
+  // 4) Convert occurredAt safely
   const occurredAt = parseISO(parsed.data.occurredAt);
   if (!occurredAt) {
     return NextResponse.json({ error: "INVALID_OCCURRED_AT" }, { status: 400 });
@@ -76,7 +77,6 @@ export async function POST(
 
   const result = await db.collection("events").insertOne(eventDoc);
 
-  // Touch case for "recently updated" sorting
   await db
     .collection("cases")
     .updateOne({ _id: caseId, userId }, { $set: { updatedAt: now } });
@@ -87,16 +87,15 @@ export async function POST(
   );
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { caseId: string } }
-) {
+export async function GET(req: NextRequest, { params }: RouteContext) {
+  const { caseId: caseIdParam } = await params;
+
   // 1) Auth
   const auth = await requireUserId(req);
   if (!auth.ok) return auth.response;
 
   // 2) Validate caseId
-  const caseId = toObjectId(params.caseId);
+  const caseId = toObjectId(caseIdParam);
   if (!caseId) {
     return NextResponse.json({ error: "INVALID_CASE_ID" }, { status: 400 });
   }
@@ -110,7 +109,6 @@ export async function GET(
     return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
   }
 
-  // 4) Query (deterministic ordering)
   const events = await db
     .collection("events")
     .find({ userId, caseId })
@@ -118,7 +116,6 @@ export async function GET(
     .limit(2000)
     .toArray();
 
-  // 5) Response (ISO serialize)
   return NextResponse.json({
     events: events.map((e: any) => ({
       id: e._id.toString(),
