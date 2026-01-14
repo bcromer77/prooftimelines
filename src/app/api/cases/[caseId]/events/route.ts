@@ -1,23 +1,41 @@
 // src/app/api/cases/[caseId]/events/route.ts
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
+
 import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/apiAuth";
 import { EventCreateSchema } from "@/lib/validators";
 
 function toObjectId(id: string) {
-  if (!ObjectId.isValid(id)) return null;
-  return new ObjectId(id);
+  return ObjectId.isValid(id) ? new ObjectId(id) : null;
 }
 
-export async function POST(req: Request, { params }: { params: { caseId: string } }) {
+function parseISO(value: unknown) {
+  if (typeof value !== "string") return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function POST(
+  req: Request,
+  { params }: { params: { caseId: string } }
+) {
+  // 1) Auth
   const auth = await requireUserId();
   if (!auth.ok) return auth.response;
 
+  // 2) Validate caseId
   const caseId = toObjectId(params.caseId);
-  if (!caseId) return NextResponse.json({ error: "INVALID_CASE_ID" }, { status: 400 });
+  if (!caseId) {
+    return NextResponse.json({ error: "INVALID_CASE_ID" }, { status: 400 });
+  }
 
+  // 3) Parse + validate body
   const body = await req.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "INVALID_JSON" }, { status: 400 });
+  }
+
   const parsed = EventCreateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -26,14 +44,23 @@ export async function POST(req: Request, { params }: { params: { caseId: string 
     );
   }
 
+  // 4) Convert occurredAt safely (prevent Invalid Date inserts)
+  const occurredAt = parseISO(parsed.data.occurredAt);
+  if (!occurredAt) {
+    return NextResponse.json({ error: "INVALID_OCCURRED_AT" }, { status: 400 });
+  }
+
+  // 5) DB + ownership
   const db = await getDb();
   const userId = new ObjectId(auth.uid);
 
   const caseDoc = await db.collection("cases").findOne({ _id: caseId, userId });
-  if (!caseDoc) return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
+  if (!caseDoc) {
+    return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
+  }
 
+  // 6) Insert
   const now = new Date();
-  const occurredAt = new Date(parsed.data.occurredAt);
 
   const eventDoc = {
     userId,
@@ -49,39 +76,57 @@ export async function POST(req: Request, { params }: { params: { caseId: string 
 
   const result = await db.collection("events").insertOne(eventDoc);
 
-  await db.collection("cases").updateOne({ _id: caseId, userId }, { $set: { updatedAt: now } });
+  // Touch case for “recently updated” sorting
+  await db
+    .collection("cases")
+    .updateOne({ _id: caseId, userId }, { $set: { updatedAt: now } });
 
-  return NextResponse.json({ eventId: result.insertedId.toString() }, { status: 201 });
+  return NextResponse.json(
+    { eventId: result.insertedId.toString() },
+    { status: 201 }
+  );
 }
 
-export async function GET(req: Request, { params }: { params: { caseId: string } }) {
+export async function GET(
+  _req: Request,
+  { params }: { params: { caseId: string } }
+) {
+  // 1) Auth
   const auth = await requireUserId();
   if (!auth.ok) return auth.response;
 
+  // 2) Validate caseId
   const caseId = toObjectId(params.caseId);
-  if (!caseId) return NextResponse.json({ error: "INVALID_CASE_ID" }, { status: 400 });
+  if (!caseId) {
+    return NextResponse.json({ error: "INVALID_CASE_ID" }, { status: 400 });
+  }
 
+  // 3) DB + ownership
   const db = await getDb();
   const userId = new ObjectId(auth.uid);
 
   const caseDoc = await db.collection("cases").findOne({ _id: caseId, userId });
-  if (!caseDoc) return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
+  if (!caseDoc) {
+    return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
+  }
 
+  // 4) Query (deterministic ordering)
   const events = await db
     .collection("events")
     .find({ userId, caseId })
-    .sort({ occurredAt: 1 })
+    .sort({ occurredAt: 1, createdAt: 1, _id: 1 })
     .limit(2000)
     .toArray();
 
+  // 5) Response (ISO serialize)
   return NextResponse.json({
     events: events.map((e: any) => ({
       id: e._id.toString(),
       occurredAt: e.occurredAt?.toISOString?.() ?? e.occurredAt,
-      title: e.title,
-      note: e.note,
-      sourceType: e.sourceType,
-      sourceRef: e.sourceRef,
+      title: e.title ?? "",
+      note: e.note ?? null,
+      sourceType: e.sourceType ?? null,
+      sourceRef: e.sourceRef ?? null,
     })),
   });
 }
