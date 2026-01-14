@@ -31,7 +31,7 @@ export default function SignInPage() {
       />
 
       <button
-        onClick={() => signIn("credentials", { email, callbackUrl: "/" })}
+        onClick={() => signIn("email", { email, callbackUrl: "/" })}
         style={{
           width: "100%",
           padding: 12,
