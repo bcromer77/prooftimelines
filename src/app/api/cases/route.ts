@@ -6,11 +6,11 @@ import { requireUserId } from "@/lib/apiAuth";
 import { CreateCaseSchema } from "@/lib/validators";
 
 export async function GET() {
-  const authRes = await requireUserId();
-  if (!authRes.ok) return authRes.response;
+  const auth = await requireUserId();
+  if (!auth.ok) return auth.response;
 
-  const db = await getDb("prooftimeline");
-  const userId = new ObjectId(authRes.userId);
+  const db = await getDb();
+  const userId = new ObjectId(auth.uid);
 
   const cases = await db
     .collection("cases")
@@ -30,8 +30,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const authRes = await requireUserId();
-  if (!authRes.ok) return authRes.response;
+  const auth = await requireUserId();
+  if (!auth.ok) return auth.response;
 
   const body = await req.json().catch(() => ({}));
   const parsed = CreateCaseSchema.safeParse(body);
@@ -42,8 +42,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const db = await getDb("prooftimeline");
-  const userId = new ObjectId(authRes.userId);
+  const db = await getDb();
+  const userId = new ObjectId(auth.uid);
 
   const now = new Date();
   const doc = {
@@ -54,6 +54,7 @@ export async function POST(req: Request) {
   };
 
   const result = await db.collection("cases").insertOne(doc);
+
   return NextResponse.json({ caseId: result.insertedId.toString() }, { status: 201 });
 }
 

@@ -10,10 +10,7 @@ function toObjectId(id: string) {
   return new ObjectId(id);
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { caseId: string } }
-) {
+export async function POST(req: Request, { params }: { params: { caseId: string } }) {
   const auth = await requireUserId();
   if (!auth.ok) return auth.response;
 
@@ -29,8 +26,8 @@ export async function POST(
     );
   }
 
-  const db = await getDb("prooftimeline");
-  const userId = new ObjectId(auth.userId);
+  const db = await getDb();
+  const userId = new ObjectId(auth.uid);
 
   const caseDoc = await db.collection("cases").findOne({ _id: caseId, userId });
   if (!caseDoc) return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
@@ -52,26 +49,20 @@ export async function POST(
 
   const result = await db.collection("events").insertOne(eventDoc);
 
-  await db.collection("cases").updateOne(
-    { _id: caseId, userId },
-    { $set: { updatedAt: now } }
-  );
+  await db.collection("cases").updateOne({ _id: caseId, userId }, { $set: { updatedAt: now } });
 
   return NextResponse.json({ eventId: result.insertedId.toString() }, { status: 201 });
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { caseId: string } }
-) {
+export async function GET(req: Request, { params }: { params: { caseId: string } }) {
   const auth = await requireUserId();
   if (!auth.ok) return auth.response;
 
   const caseId = toObjectId(params.caseId);
   if (!caseId) return NextResponse.json({ error: "INVALID_CASE_ID" }, { status: 400 });
 
-  const db = await getDb("prooftimeline");
-  const userId = new ObjectId(auth.userId);
+  const db = await getDb();
+  const userId = new ObjectId(auth.uid);
 
   const caseDoc = await db.collection("cases").findOne({ _id: caseId, userId });
   if (!caseDoc) return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
