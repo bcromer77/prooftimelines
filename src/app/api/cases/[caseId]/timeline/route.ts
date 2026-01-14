@@ -20,7 +20,7 @@ export async function GET(
   { params }: { params: { caseId: string } }
 ) {
   // 1) Auth
-  const auth = await requireUserId();
+  const auth = await requireUserId(req);
   if (!auth.ok) {
     return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   }
@@ -86,4 +86,3 @@ export async function GET(
     })),
   });
 }
-

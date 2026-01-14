@@ -5,8 +5,8 @@ import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/apiAuth";
 import { CreateCaseSchema } from "@/lib/validators";
 
-export async function GET() {
-  const auth = await requireUserId();
+export async function GET(req: Request) {
+  const auth = await requireUserId(req);
   if (!auth.ok) return auth.response;
 
   const db = await getDb();
@@ -30,7 +30,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireUserId();
+  const auth = await requireUserId(req);
   if (!auth.ok) return auth.response;
 
   const body = await req.json().catch(() => ({}));
@@ -57,4 +57,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ caseId: result.insertedId.toString() }, { status: 201 });
 }
-

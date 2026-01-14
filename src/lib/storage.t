@@ -1,7 +1,9 @@
 // src/lib/storage.ts
 import fs from "fs/promises";
 import path from "path";
+import https from "https";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
 
 function requireEnv(name: string) {
   const v = process.env[name];
@@ -12,31 +14,34 @@ function requireEnv(name: string) {
 function hasS3Env() {
   return Boolean(
     process.env.S3_BUCKET &&
-    process.env.S3_ACCESS_KEY_ID &&
-    process.env.S3_SECRET_ACCESS_KEY &&
-    process.env.S3_ENDPOINT
+      process.env.S3_ACCESS_KEY_ID &&
+      process.env.S3_SECRET_ACCESS_KEY &&
+      process.env.S3_ENDPOINT
   );
 }
 
-/**
- * Configures the S3 Client for Cloudflare R2.
- * R2 requires region: "auto" and forcePathStyle: true.
- */
 function getClient() {
+  const region = process.env.S3_REGION || process.env.AWS_REGION || "auto";
   const endpoint = requireEnv("S3_ENDPOINT");
 
   return new S3Client({
-    region: "auto",
+    region,
     endpoint,
-    forcePathStyle: true, // ✅ Required for R2 account endpoints to avoid TLS errors
+    forcePathStyle: true, // ✅ REQUIRED for Cloudflare R2
+    // ✅ FIX: Explicitly handle the HTTPS connection to prevent SSL handshake failures
+    requestHandler: new NodeHttpHandler({
+      httpsAgent: new https.Agent({
+        keepAlive: true,
+        // Cloudflare R2 sometimes requires specific TLS versions or rejects default Node handshakes
+        minVersion: "TLSv1.2",
+      }),
+    }),
     credentials: {
       accessKeyId: requireEnv("S3_ACCESS_KEY_ID"),
       secretAccessKey: requireEnv("S3_SECRET_ACCESS_KEY"),
     },
   });
 }
-
-/* ---------- Local Development Fallback ---------- */
 
 async function putLocal(key: string, body: Buffer) {
   const root = path.join(process.cwd(), "storage_dev");
@@ -52,18 +57,14 @@ async function getLocal(key: string) {
   return fs.readFile(full);
 }
 
-/* ---------- Public API ---------- */
-
 export async function putObject(args: {
   key: string;
   body: Buffer;
   contentType?: string;
   metadata?: Record<string, string>;
 }) {
-  // If R2 env vars are missing, use local storage in dev mode
   if (!hasS3Env()) {
     if (process.env.NODE_ENV === "development") {
-      console.log("[storage] S3 env missing, falling back to local storage");
       return putLocal(args.key, args.body);
     }
     throw new Error("S3_ENV_MISSING_NO_FALLBACK");
@@ -72,23 +73,17 @@ export async function putObject(args: {
   const Bucket = requireEnv("S3_BUCKET");
   const s3 = getClient();
 
-  try {
-    console.log("[storage] Attempting PutObject to R2...");
-    await s3.send(
-      new PutObjectCommand({
-        Bucket,
-        Key: args.key,
-        Body: args.body,
-        ContentType: args.contentType || "application/octet-stream",
-        Metadata: args.metadata,
-      })
-    );
-    console.log("[storage] PutObject succeeded:", args.key);
-    return { storageRef: args.key };
-  } catch (err: any) {
-    console.error("[storage] PutObject failed:", err.message);
-    throw err;
-  }
+  await s3.send(
+    new PutObjectCommand({
+      Bucket,
+      Key: args.key,
+      Body: args.body,
+      ContentType: args.contentType || "application/octet-stream",
+      Metadata: args.metadata,
+    })
+  );
+
+  return { storageRef: args.key };
 }
 
 export async function getObjectBuffer(storageRef: string) {

@@ -21,7 +21,7 @@ export async function POST(
   { params }: { params: { caseId: string } }
 ) {
   // 1) Auth
-  const auth = await requireUserId();
+  const auth = await requireUserId(req);
   if (!auth.ok) return auth.response;
 
   // 2) Validate caseId
@@ -76,7 +76,7 @@ export async function POST(
 
   const result = await db.collection("events").insertOne(eventDoc);
 
-  // Touch case for “recently updated” sorting
+  // Touch case for "recently updated" sorting
   await db
     .collection("cases")
     .updateOne({ _id: caseId, userId }, { $set: { updatedAt: now } });
@@ -88,11 +88,11 @@ export async function POST(
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { caseId: string } }
 ) {
   // 1) Auth
-  const auth = await requireUserId();
+  const auth = await requireUserId(req);
   if (!auth.ok) return auth.response;
 
   // 2) Validate caseId
@@ -130,4 +130,3 @@ export async function GET(
     })),
   });
 }
-
