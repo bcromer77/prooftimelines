@@ -45,10 +45,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     );
   }
 
-  // 4) Convert occurredAt safely (prevent Invalid Date inserts)
-  const occurredAt = parseISO(parsed.data.occurredAt);
-  if (!occurredAt) {
-    return NextResponse.json({ error: "INVALID_OCCURRED_AT" }, { status: 400 });
+  // 4) Convert date safely (prevent Invalid Date inserts)
+  const date = parseISO(parsed.data.date);
+  if (!date) {
+    return NextResponse.json({ error: "INVALID_DATE" }, { status: 400 });
   }
 
   // 5) DB + ownership
@@ -66,10 +66,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const eventDoc = {
     userId,
     caseId,
-    occurredAt,
+    date, // canonical Event Time axis
     title: parsed.data.title,
     note: parsed.data.note ?? null,
-    sourceType: parsed.data.sourceType,
+    sourceType: parsed.data.sourceType ?? "NOTE",
     sourceRef: parsed.data.sourceRef ?? null,
     createdAt: now,
     updatedAt: now,
@@ -82,10 +82,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     .collection("cases")
     .updateOne({ _id: caseId, userId }, { $set: { updatedAt: now } });
 
-  return NextResponse.json(
-    { eventId: result.insertedId.toString() },
-    { status: 201 }
-  );
+  return NextResponse.json({ eventId: result.insertedId.toString() }, { status: 201 });
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
@@ -114,19 +111,23 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const events = await db
     .collection("events")
     .find({ userId, caseId })
-    .sort({ occurredAt: 1, createdAt: 1, _id: 1 })
-    .limit(2000)
+    .sort({ date: 1, createdAt: 1, _id: 1 })
+    .limit(5000)
     .toArray();
 
-  // 5) Response (ISO serialize)
+  // 5) Response (serialize)
   return NextResponse.json({
     events: events.map((e: any) => ({
-      id: e._id.toString(),
-      occurredAt: e.occurredAt?.toISOString?.() ?? e.occurredAt,
+      _id: e._id.toString(),
+      caseId: caseIdParam,
+      date: e.date?.toISOString?.() ?? e.date,
       title: e.title ?? "",
       note: e.note ?? null,
       sourceType: e.sourceType ?? null,
       sourceRef: e.sourceRef ?? null,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
     })),
   });
 }
+

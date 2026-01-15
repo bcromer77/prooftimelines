@@ -1,7 +1,11 @@
 // src/lib/storage.ts
+
 import fs from "fs/promises";
 import path from "path";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
+import https from "https";
+
 
 function requireEnv(name: string) {
   const v = process.env[name];
@@ -25,10 +29,18 @@ function hasS3Env() {
 function getClient() {
   const endpoint = requireEnv("S3_ENDPOINT");
 
+  const agent = new https.Agent({
+    keepAlive: true,
+    minVersion: "TLSv1.2",
+  });
+
   return new S3Client({
     region: "auto",
     endpoint,
-    forcePathStyle: true, // ✅ Required for R2 account endpoints to avoid TLS errors
+    forcePathStyle: true,
+    requestHandler: new NodeHttpHandler({
+      httpsAgent: agent,
+    }),
     credentials: {
       accessKeyId: requireEnv("S3_ACCESS_KEY_ID"),
       secretAccessKey: requireEnv("S3_SECRET_ACCESS_KEY"),
@@ -60,6 +72,12 @@ export async function putObject(args: {
   contentType?: string;
   metadata?: Record<string, string>;
 }) {
+  const FORCE_LOCAL = process.env.STORAGE_FORCE_LOCAL === "1";
+  if (FORCE_LOCAL && process.env.NODE_ENV === "development") {
+    console.log("[storage] STORAGE_FORCE_LOCAL=1; using local storage");
+    return putLocal(args.key, args.body);
+  }
+
   // If R2 env vars are missing, use local storage in dev mode
   if (!hasS3Env()) {
     if (process.env.NODE_ENV === "development") {
@@ -91,28 +109,3 @@ export async function putObject(args: {
   }
 }
 
-export async function getObjectBuffer(storageRef: string) {
-  if (storageRef.startsWith("local:")) {
-    return getLocal(storageRef.slice("local:".length));
-  }
-
-  if (!hasS3Env()) {
-    throw new Error("STORAGE_NOT_CONFIGURED_AND_NOT_LOCAL");
-  }
-
-  const Bucket = requireEnv("S3_BUCKET");
-  const s3 = getClient();
-
-  const res = await s3.send(
-    new GetObjectCommand({ Bucket, Key: storageRef })
-  );
-
-  if (!res.Body) throw new Error("S3_EMPTY_BODY");
-
-  const chunks: Buffer[] = [];
-  for await (const chunk of res.Body as any) {
-    chunks.push(Buffer.from(chunk));
-  }
-
-  return Buffer.concat(chunks);
-}

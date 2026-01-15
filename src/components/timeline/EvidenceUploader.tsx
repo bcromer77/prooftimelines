@@ -1,72 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import React from "react";
+import { devHeaders } from "@/lib/api";
 
-function devHeaders(): Record<string, string> {
-  const h: Record<string, string> = {};
-  const dev = process.env.NEXT_PUBLIC_DEV_USERID;
-  if (dev) h["x-dev-userid"] = dev;
-  return h;
-}
-
-export default function EvidenceUploader({
-  caseId,
-  eventId,
-  onUploaded,
-}: {
+type Props = {
   caseId: string;
-  eventId: string;
-  onUploaded: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  eventId?: string;
+  onUploaded?: () => void | Promise<void>;
+};
 
-  async function upload(file: File) {
+export default function EvidenceUploader({ caseId, eventId, onUploaded }: Props) {
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const openPicker = () => {
+    setError(null);
+    inputRef.current?.click();
+  };
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+
     setBusy(true);
-    setErr(null);
+    setError(null);
+
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("eventIds", JSON.stringify([eventId])); // aligns with “linked to one or more events”
+      if (eventId) fd.append("eventId", eventId);
 
       const res = await fetch(`/api/cases/${caseId}/evidence`, {
         method: "POST",
-        headers: devHeaders(), // don't set content-type for FormData
         body: fd,
+
+        // ✅ IMPORTANT:
+        // - do NOT set Content-Type for FormData (browser adds boundary)
+        // - DO include dev auth header so ownership matches other API calls
+        headers: devHeaders(),
       });
 
       if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(t || `Upload failed (${res.status})`);
+        let msg = `upload failed (${res.status})`;
+        try {
+          const data = await res.json();
+          msg = data?.error ? String(data.error) : msg;
+        } catch {
+          const text = await res.text().catch(() => "");
+          if (text) msg = text;
+        }
+        throw new Error(msg);
       }
 
-      await onUploaded();
-    } catch (e: any) {
-      setErr(e.message || "Upload failed");
+      // ✅ refresh AFTER upload completes
+      await onUploaded?.();
+    } catch (err: any) {
+      setError(err?.message || "couldn't upload. try again.");
     } finally {
       setBusy(false);
+      // ✅ reset so selecting the same file again triggers onChange
+      if (inputRef.current) inputRef.current.value = "";
     }
-  }
+  };
 
   return (
-    <div className="space-y-2 text-right">
-      <label className="inline-flex items-center gap-2 cursor-pointer">
-        <input
-          type="file"
-          className="hidden"
-          disabled={busy}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) upload(f);
-            e.currentTarget.value = "";
-          }}
-        />
-        <span className="rounded-md border px-3 py-2 text-sm">
-          {busy ? "Uploading…" : "Upload Evidence"}
-        </span>
-      </label>
+    <div className="flex items-center gap-2">
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        onChange={onPickFile}
+      />
 
-      {err && <div className="text-xs text-muted-foreground">{err}</div>}
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={busy}
+        className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+      >
+        {busy ? "uploading…" : "attach evidence"}
+      </button>
+
+      {error ? <span className="text-xs text-slate-500">{error}</span> : null}
     </div>
   );
 }

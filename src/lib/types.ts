@@ -1,9 +1,22 @@
 export type Case = {
   _id: string;
   title?: string;
-  name?: string; // depending on your backend
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type ListCasesResponse = {
+  cases: Array<{
+    _id?: string;
+    id?: string;
+    title?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
+};
+
+export type CreateCaseResponse = {
+  caseId: string;
 };
 
 export type Event = {
@@ -11,8 +24,8 @@ export type Event = {
   caseId: string;
   date: string; // ISO string (Event Time)
   title: string;
-  note?: string;
-  createdAt?: string; // Capture-ish, but still system time
+  note?: string | null;
+  createdAt?: string;
 };
 
 export type EvidenceLedger = {
@@ -28,19 +41,13 @@ export type EvidenceItem = {
   mimeType?: string;
   size?: number;
 
-  // immutable metadata
   sha256: string;
-
-  // Capture Time (system axis)
   capturedAt: string;
 
-  // Ledger Order (immutable ordering)
   ledger: EvidenceLedger;
 
-  // relationship
   eventIds?: string[];
 
-  // storage reference
   storageKey?: string;
   url?: string;
 };

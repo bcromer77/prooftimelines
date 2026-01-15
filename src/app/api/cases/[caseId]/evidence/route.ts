@@ -64,11 +64,26 @@ export async function POST(
     const buf = Buffer.from(await file.arrayBuffer());
     const sha256 = sha256Hex(buf);
 
+    // ✅ NEW: optional eventId association (string in formdata)
+    const eventIdRaw = form.get("eventId");
+    const eventId =
+      typeof eventIdRaw === "string" ? toObjectId(eventIdRaw) : null;
+
+    // ✅ Recommended safety: if provided but invalid, fail fast
+    if (eventIdRaw && !eventId) {
+      return NextResponse.json(
+        { error: "INVALID_EVENT_ID", received: String(eventIdRaw) },
+        { status: 400 }
+      );
+    }
+
     const db = await getDb();
     const userId = new ObjectId(auth.uid);
 
     // Verify case ownership
-    const caseDoc = await db.collection("cases").findOne({ _id: caseId, userId });
+    const caseDoc = await db
+      .collection("cases")
+      .findOne({ _id: caseId, userId });
     if (!caseDoc) {
       return NextResponse.json(
         { error: "CASE_NOT_FOUND", caseId: caseId.toString() },
@@ -76,8 +91,21 @@ export async function POST(
       );
     }
 
+    // Optional: verify event belongs to this case (uncomment if you want strictness)
+    // if (eventId) {
+    //   const ev = await db.collection("events").findOne({ _id: eventId, caseId, userId });
+    //   if (!ev) {
+    //     return NextResponse.json(
+    //       { error: "EVENT_NOT_FOUND", eventId: eventId.toString(), caseId: caseId.toString() },
+    //       { status: 404 }
+    //     );
+    //   }
+    // }
+
     // Deduplicate per case
-    const dup = await db.collection("evidence_items").findOne({ userId, caseId, sha256 });
+    const dup = await db
+      .collection("evidence_items")
+      .findOne({ userId, caseId, sha256 });
     if (dup) {
       return NextResponse.json(
         { error: "DUPLICATE_EVIDENCE", evidenceId: dup._id.toString() },
@@ -134,6 +162,10 @@ export async function POST(
             _id: evidenceId,
             userId,
             caseId,
+
+            // ✅ NEW: store event association (nullable)
+            eventId,
+
             storageRef,
             sha256,
             byteLength: buf.length,
@@ -177,6 +209,7 @@ export async function POST(
       {
         ok: true,
         evidenceId: evidenceId.toString(),
+        eventId: eventId ? eventId.toString() : null, // ✅ helpful for debugging/UI
         sha256,
         capturedAt: capturedAtIso,
         ledger: { prevHash, hash: ledgerHash, sequenceNumber },
@@ -201,4 +234,3 @@ export async function POST(
     );
   }
 }
-

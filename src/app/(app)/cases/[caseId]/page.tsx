@@ -1,14 +1,19 @@
-import TimelineView from "@/components/timeline/TimelineView";
+// src/app/(app)/cases/[caseId]/page.tsx
 
-export default async function CaseTimelinePage({
-  params,
-}: {
-  params: { caseId: string };
-}) {
-  return (
-    <div className="mx-auto max-w-6xl p-6 space-y-6">
-      <TimelineView caseId={params.caseId} />
-    </div>
-  );
+import { notFound } from "next/navigation";
+import CaseClient from "./CaseClient";
+
+type PageProps = {
+  params: Promise<{ caseId: string }>;
+};
+
+export default async function CasePage({ params }: PageProps) {
+  const { caseId } = await params;
+
+  if (!caseId || typeof caseId !== "string") {
+    notFound();
+  }
+
+  return <CaseClient caseId={caseId} />;
 }
 

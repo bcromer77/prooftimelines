@@ -1,13 +1,27 @@
-export default function ExportPage({ params }: { params: { caseId: string } }) {
+// src/app/(app)/cases/[caseId]/export/page.tsx
+
+import { notFound } from "next/navigation";
+
+type PageProps = {
+  params: Promise<{ caseId: string }>;
+};
+
+export default async function ExportPage({ params }: PageProps) {
+  const { caseId } = await params;
+
+  if (!caseId || typeof caseId !== "string") {
+    notFound();
+  }
+
   return (
-    <div className="mx-auto max-w-6xl p-6 space-y-3">
-      <h1 className="text-2xl font-semibold">Export</h1>
-      <p className="text-sm text-muted-foreground">
-        Export packs are not implemented yet. This page will provide a neutral, ordered JSON export
-        of case metadata, events, evidence references, and the hash chain.
+    <div className="p-6">
+      <h1 className="text-xl font-semibold">export</h1>
+      <p className="text-sm text-muted-foreground mt-2">
+        export pack is coming soon.
       </p>
-      <div className="rounded-md border p-4 text-sm">
-        CaseId: <span className="font-mono">{params.caseId}</span>
+
+      <div className="mt-6 text-sm">
+        dossier id: <span className="font-mono">{caseId}</span>
       </div>
     </div>
   );

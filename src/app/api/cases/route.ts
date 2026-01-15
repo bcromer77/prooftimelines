@@ -15,16 +15,17 @@ export async function GET(req: Request) {
   const cases = await db
     .collection("cases")
     .find({ userId })
-    .sort({ updatedAt: -1 })
+    .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
     .project({ title: 1, createdAt: 1, updatedAt: 1 })
     .toArray();
 
   return NextResponse.json({
     cases: cases.map((c: any) => ({
-      id: c._id.toString(),
-      title: c.title,
-      createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
+      _id: c._id.toString(), // canonical for UI
+      id: c._id.toString(),  // optional compatibility
+      title: c.title ?? "",
+      createdAt: c.createdAt?.toISOString?.() ?? c.createdAt ?? null,
+      updatedAt: c.updatedAt?.toISOString?.() ?? c.updatedAt ?? null,
     })),
   });
 }
@@ -55,5 +56,9 @@ export async function POST(req: Request) {
 
   const result = await db.collection("cases").insertOne(doc);
 
-  return NextResponse.json({ caseId: result.insertedId.toString() }, { status: 201 });
+  return NextResponse.json(
+    { caseId: result.insertedId.toString() },
+    { status: 201 }
+  );
 }
+
