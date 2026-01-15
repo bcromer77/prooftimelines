@@ -6,8 +6,6 @@ import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/apiAuth";
 import { EventCreateSchema } from "@/lib/validators";
 
-type RouteContext = { params: Promise<{ caseId: string }> };
-
 function toObjectId(id: string) {
   return ObjectId.isValid(id) ? new ObjectId(id) : null;
 }
@@ -17,6 +15,8 @@ function parseISO(value: unknown) {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
+type RouteContext = { params: Promise<{ caseId: string }> };
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { caseId: caseIdParam } = await params;
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     );
   }
 
-  // 4) Convert occurredAt safely
+  // 4) Convert occurredAt safely (prevent Invalid Date inserts)
   const occurredAt = parseISO(parsed.data.occurredAt);
   if (!occurredAt) {
     return NextResponse.json({ error: "INVALID_OCCURRED_AT" }, { status: 400 });
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   const result = await db.collection("events").insertOne(eventDoc);
 
+  // Touch case for "recently updated" sorting
   await db
     .collection("cases")
     .updateOne({ _id: caseId, userId }, { $set: { updatedAt: now } });
@@ -109,6 +110,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "CASE_NOT_FOUND" }, { status: 404 });
   }
 
+  // 4) Query (deterministic ordering)
   const events = await db
     .collection("events")
     .find({ userId, caseId })
@@ -116,6 +118,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     .limit(2000)
     .toArray();
 
+  // 5) Response (ISO serialize)
   return NextResponse.json({
     events: events.map((e: any) => ({
       id: e._id.toString(),
@@ -127,4 +130,3 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     })),
   });
 }
-// Force fresh build Wed 14 Jan 2026 23:43:58 GMT
