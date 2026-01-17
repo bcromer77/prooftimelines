@@ -60,32 +60,41 @@ export async function GET(
     .sort({ date: 1, createdAt: 1, _id: 1 })
     .toArray();
 
-  // 4) Load evidence (ledger order)
+  // 4) Load evidence (ledger order) — ✅ FIXED: was "evidence", now "evidence_items"
   const evidence = await db
-    .collection("evidence")
+    .collection("evidence_items")
     .find({ caseId, userId })
     .project({
-      fileName: 1,
+      filename: 1,
       mimeType: 1,
-      size: 1,
+      byteLength: 1,
       sha256: 1,
       capturedAt: 1,
-      eventIds: 1,
-      ledger: 1,
-      storageKey: 1,
+      eventId: 1,
+      storageRef: 1,
       createdAt: 1,
     })
-    .sort({ "ledger.sequenceNumber": 1, createdAt: 1, _id: 1 })
+    .sort({ createdAt: 1, _id: 1 })
     .toArray();
 
-  // 5) Extract ledger chain explicitly (deterministic)
-  const ledger = evidence.map((e: any) => ({
-    sequenceNumber: e.ledger?.sequenceNumber ?? null,
-    hash: e.ledger?.hash ?? null,
-    previousHash: e.ledger?.previousHash ?? null,
-    evidenceId: e._id.toString(),
-    capturedAt: e.capturedAt ?? null,
-  }));
+  // 5) Load ledger chain explicitly (deterministic)
+  const evidenceIds = evidence.map((e: any) => e._id);
+  const ledgerRows = await db
+    .collection("ledger")
+    .find({ evidenceId: { $in: evidenceIds } })
+    .project({
+      sequenceNumber: 1,
+      hash: 1,
+      prevHash: 1,
+      evidenceId: 1,
+      capturedAt: 1,
+    })
+    .sort({ sequenceNumber: 1 })
+    .toArray();
+
+  const ledgerMap = new Map(
+    ledgerRows.map((r: any) => [r.evidenceId.toString(), r])
+  );
 
   // 6) Build export payload (boring on purpose)
   const payload = {
@@ -105,21 +114,34 @@ export async function GET(
       updatedAt: e.updatedAt,
     })),
 
-    evidence: evidence.map((x: any) => ({
-      _id: x._id.toString(),
-      fileName: x.fileName ?? null,
-      mimeType: x.mimeType ?? null,
-      size: x.size ?? null,
-      sha256: x.sha256,
-      capturedAt: x.capturedAt ?? null,
-      eventIds: (x.eventIds || []).map((id: any) =>
-        id?.toString?.() ?? String(id)
-      ),
-      ledger: x.ledger ?? null,
-      storageKey: x.storageKey ?? null,
-    })),
+    evidence: evidence.map((x: any) => {
+      const ledger = ledgerMap.get(x._id.toString());
+      return {
+        _id: x._id.toString(),
+        filename: x.filename ?? null,
+        mimeType: x.mimeType ?? null,
+        byteLength: x.byteLength ?? null,
+        sha256: x.sha256,
+        capturedAt: x.capturedAt ?? null,
+        eventId: x.eventId?.toString() ?? null,
+        ledger: ledger
+          ? {
+              sequenceNumber: ledger.sequenceNumber,
+              hash: ledger.hash,
+              prevHash: ledger.prevHash,
+            }
+          : null,
+        storageRef: x.storageRef ?? null,
+      };
+    }),
 
-    ledger,
+    ledger: ledgerRows.map((r: any) => ({
+      sequenceNumber: r.sequenceNumber,
+      hash: r.hash,
+      prevHash: r.prevHash,
+      evidenceId: r.evidenceId.toString(),
+      capturedAt: r.capturedAt,
+    })),
 
     exportedAt: new Date().toISOString(),
   };
@@ -131,4 +153,3 @@ export async function GET(
     },
   });
 }
-
