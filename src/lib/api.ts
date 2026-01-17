@@ -8,30 +8,20 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") || "";
 
-function jsonHeaders(extra?: HeadersInit) {
-  const h: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((extra as any) || {}),
-  };
-
+/** Dev header helper (safe for JSON + FormData) */
+export function devHeaders(extra?: HeadersInit): HeadersInit {
+  const h: Record<string, string> = { ...((extra as any) || {}) };
   const dev = process.env.NEXT_PUBLIC_DEV_USERID;
   if (dev) h["x-dev-userid"] = dev;
-
   return h;
 }
 
-/**
- * For FormData requests (uploads):
- * - do NOT set Content-Type manually (browser will set boundary)
- * - still include dev auth header in development
- */
-export function devHeaders(extra?: HeadersInit): HeadersInit {
-  const h: Record<string, string> = { ...((extra as any) || {}) };
-
-  const dev = process.env.NEXT_PUBLIC_DEV_USERID;
-  if (dev) h["x-dev-userid"] = dev;
-
-  return h;
+/** JSON headers (adds content-type) */
+function jsonHeaders(extra?: HeadersInit): HeadersInit {
+  return devHeaders({
+    "Content-Type": "application/json",
+    ...((extra as any) || {}),
+  });
 }
 
 async function asJson<T>(res: Response): Promise<T> {
@@ -59,13 +49,11 @@ export async function listCases(): Promise<Case[]> {
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
     }))
-    .filter((c) => Boolean(c._id)); // never allow undefined ids into UI
+    .filter((c) => Boolean(c._id));
 }
 
 /** Create Dossier (server returns { caseId }) */
-export async function createCase(payload: {
-  title: string;
-}): Promise<CreateCaseResponse> {
+export async function createCase(payload: { title: string }): Promise<CreateCaseResponse> {
   const res = await fetch(`${BASE}/api/cases`, {
     method: "POST",
     headers: jsonHeaders(),
@@ -93,10 +81,8 @@ export async function createEvent(
     body: JSON.stringify(payload),
   });
 
-  // events route returns { eventId }
   const out = await asJson<{ eventId: string }>(res);
 
-  // minimal event; TimelineView refresh() fetches canonical data.
   return {
     _id: out.eventId,
     caseId,

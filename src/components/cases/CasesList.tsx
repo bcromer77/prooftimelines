@@ -129,161 +129,161 @@ export default function CasesList() {
   const canCreate = Boolean(title.trim()) && !busy;
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Dossiers
-        </h1>
-        <p className="text-sm text-slate-600">
-          A Dossier is a bounded timeline. No cross-dossier access.
-        </p>
-      </div>
+    <div className="relative">
+      {/* Optional vertical timeline cue */}
+      <div className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-slate-200/60 via-slate-200/30 to-transparent" />
 
-      <div className="rounded-md border border-slate-200 bg-white/50 p-4 space-y-3">
-        <div className="space-y-1">
-          <div className="text-sm font-medium text-slate-900">New Dossier</div>
-          <div className="text-xs text-slate-600">
-            Creates a new timeline. You can rename it later.
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onCreate();
-            }}
-            placeholder="Dossier title (e.g. Employment dispute)"
-            className="w-full rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:bg-white"
-            disabled={busy}
-          />
-          <button
-            onClick={onCreate}
-            disabled={!canCreate}
-            className="rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-sm hover:bg-white disabled:opacity-50"
-          >
-            {busy ? "creating…" : "create"}
-          </button>
-        </div>
-
-        {error && (
-          <div className="text-sm text-slate-700 rounded-md border border-slate-200 bg-white/70 p-3">
-            {error}
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search Dossiers…"
-            className="w-full md:w-80 rounded-md border border-slate-200 bg-white/60 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:bg-white"
-          />
-          <div className="text-xs text-slate-500">{filtered.length} total</div>
-        </div>
-
-        {earlier.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowEarlier((v) => !v)}
-            className="text-sm rounded-md border border-slate-200 bg-white/60 px-3 py-2 hover:bg-white"
-          >
-            {showEarlier ? "hide earlier" : `show earlier (${earlier.length})`}
-          </button>
-        )}
-      </div>
-
-      {loading ? (
-        <div className="text-sm text-slate-600">Loading…</div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-md border border-slate-200 bg-white/50 p-6 text-sm text-slate-600">
-          No Dossiers yet.
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-slate-600">
-              Active Dossiers
-            </div>
-
-            <div className="grid gap-3">
-              {active.map((d: any) => {
-                const id = d._id;
-                const label = d.title?.trim() || "Untitled Dossier";
-                const optimistic = Boolean(d.__optimistic);
-                const clickable = !String(id).startsWith("temp-");
-
-                return (
-                  <Link
-                    key={String(id)}
-                    href={clickable ? `/cases/${id}` : "#"}
-                    onClick={(e) => {
-                      if (!clickable) e.preventDefault();
-                    }}
-                    className={cls(
-                      "relative rounded-md border border-slate-200 bg-white/50 p-4 transition hover:bg-white/80",
-                      optimistic && "opacity-80"
-                    )}
-                  >
-                    <div className="absolute left-0 top-0 h-full w-[2px] bg-slate-200/60" />
-
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium text-slate-900 truncate">
-                          {label}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500 font-mono">
-                          {shortId(String(id))}
-                        </div>
-                      </div>
-
-                      {optimistic ? (
-                        <div className="text-xs text-slate-500">just created…</div>
-                      ) : null}
-                    </div>
-                  </Link>
-                );
-              })}
+      <div className="space-y-6">
+        <div className="rounded-md border border-slate-200 bg-white/50 p-4 space-y-3">
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-slate-900">New Dossier</div>
+            <div className="text-xs text-slate-600">
+              Creates a new timeline. You can rename it later.
             </div>
           </div>
 
-          {showEarlier && earlier.length > 0 ? (
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-slate-600">
-                Earlier Dossiers
+          <div className="flex gap-2">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onCreate();
+              }}
+              placeholder="Dossier title (e.g. Employment dispute)"
+              className="w-full rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:bg-white"
+              disabled={busy}
+            />
+            <button
+              onClick={onCreate}
+              disabled={!canCreate}
+              className="rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-sm hover:bg-white disabled:opacity-50"
+            >
+              {busy ? "creating…" : "create"}
+            </button>
+          </div>
+
+          {error && (
+            <div className="text-sm text-slate-700 rounded-md border border-slate-200 bg-white/70 p-3">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Section plane wrapper for main content */}
+        <div className="relative rounded-lg border border-slate-200 bg-white/70 backdrop-blur-sm p-6 space-y-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search Dossiers…"
+                className="w-full md:w-80 rounded-md border border-slate-200 bg-white/60 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:bg-white"
+              />
+              <div className="text-xs text-slate-500">{filtered.length} total</div>
+            </div>
+
+            {earlier.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowEarlier((v) => !v)}
+                className="text-sm rounded-md border border-slate-200 bg-white/60 px-3 py-2 hover:bg-white"
+              >
+                {showEarlier ? "hide earlier" : `show earlier (${earlier.length})`}
+              </button>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-md border border-slate-200 bg-white/50 p-6 text-sm text-slate-600">
+              No Dossiers yet.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-slate-600">
+                  Active Dossiers
+                </div>
+
+                <div className="grid gap-3">
+                  {active.map((d: any) => {
+                    const id = d._id;
+                    const label = d.title?.trim() || "Untitled Dossier";
+                    const optimistic = Boolean(d.__optimistic);
+                    const clickable = !String(id).startsWith("temp-");
+
+                    return (
+                      <Link
+                        key={String(id)}
+                        href={clickable ? `/cases/${id}` : "#"}
+                        onClick={(e) => {
+                          if (!clickable) e.preventDefault();
+                        }}
+                        className={cls(
+                          "relative rounded-md border border-slate-200 bg-white/50 p-4 transition hover:bg-white/80",
+                          optimistic && "opacity-80"
+                        )}
+                      >
+                        <div className="absolute left-0 top-0 h-full w-[2px] bg-slate-200/60" />
+
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-medium text-slate-900 truncate">
+                              {label}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500 font-mono">
+                              {shortId(String(id))}
+                            </div>
+                          </div>
+
+                          {optimistic ? (
+                            <div className="text-xs text-slate-500">
+                              just created…
+                            </div>
+                          ) : null}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="grid gap-3">
-                {earlier.map((d) => {
-                  const id = d._id;
-                  const label = d.title?.trim() || "Untitled Dossier";
+              {showEarlier && earlier.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-slate-600">
+                    Earlier Dossiers
+                  </div>
 
-                  return (
-                    <Link
-                      key={String(id)}
-                      href={`/cases/${id}`}
-                      className="relative rounded-md border border-slate-200 bg-white/40 p-4 transition hover:bg-white/70"
-                    >
-                      <div className="absolute left-0 top-0 h-full w-[2px] bg-slate-100" />
+                  <div className="grid gap-3">
+                    {earlier.map((d) => {
+                      const id = d._id;
+                      const label = d.title?.trim() || "Untitled Dossier";
 
-                      <div className="font-medium text-slate-900 truncate">
-                        {label}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500 font-mono">
-                        {shortId(String(id))}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
+                      return (
+                        <Link
+                          key={String(id)}
+                          href={`/cases/${id}`}
+                          className="relative rounded-md border border-slate-200 bg-white/40 p-4 transition hover:bg-white/70"
+                        >
+                          <div className="absolute left-0 top-0 h-full w-[2px] bg-slate-100" />
+
+                          <div className="font-medium text-slate-900 truncate">
+                            {label}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500 font-mono">
+                            {shortId(String(id))}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
-
