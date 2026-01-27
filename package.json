@@ -1,35 +1,15 @@
 {
-  "name": "app",
-  "version": "0.1.0",
+  "name": "prooftimelines-monorepo",
   "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@auth/mongodb-adapter": "^3.11.1",
-    "@aws-sdk/client-s3": "^3.968.0",
-    "@aws-sdk/node-http-handler": "^3.370.0",
-    "@aws-sdk/s3-request-presigner": "^3.968.0",
-    "@smithy/node-http-handler": "^4.4.8",
-    "mongodb": "^6.21.0",
-    "next": "16.1.1",
-    "next-auth": "^4.24.13",
-    "nodemailer": "^7.0.12",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "zod": "^4.3.5"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.1",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "dev:pt": "pnpm --filter prooftimeline dev",
+    "dev:er": "pnpm --filter evidencerooms dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint"
   }
 }

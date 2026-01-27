@@ -1,319 +1,411 @@
- ProofTimeline
+README — ProofTimelines & EvidenceRooms
 
-**ProofTimeline** is a chronology-first evidence system.
+Audience: Zach (Backend / Systems Engineering)
+Purpose: End-to-end system design, no ambiguity
 
-It exists to do one thing:
+0. READ THIS FIRST (Non-negotiables)
 
-> Render time honestly so humans can see when things stop lining up.
+This system is evidence-first, deterministic, and audit-safe.
 
-This is **not**:
-- a legal conclusions engine  
-- a truth engine  
-- an AI judge  
+Things we DO NOT DO:
 
-It is a system for **chronological integrity**.
+❌ No scoring
 
----
+❌ No ranking
 
-## Product Definition (LOCKED)
+❌ No “AI insights”
 
-### Core Purpose
+❌ No opinions
 
-**ProofTimeline establishes where, when, and how claims stop matching over time — using evidence-backed chronological intelligence.**
+❌ No inferred decisions
 
-The system never declares who is right or wrong.  
-It only shows **when alignment changes**.
+❌ No silent transformations
 
----
+Things we DO:
 
-### Operating Model (LOCKED)
+✅ Store raw evidence
 
-**T0–T4 Timeline States**
+✅ Preserve provenance (file, page, quote)
 
-- **T0** — Baseline context  
-- **T1** — First recorded event / claim  
-- **T2** — Subsequent events  
-- **T3** — Chronological sequencing  
-- **T4** — Points where alignment changes  
+✅ Extract only fixed variables
 
-**Pipeline**
+✅ Use embeddings only for retrieval
 
-Evidence → Events → Timeline → Alignment Changes → Exportable Proof
+✅ Keep decisions explicitly human-set
 
-markdown
-Copy code
+If something feels “smart” or “helpful”, it is probably wrong.
 
-✅ Concept is consistent across code, routes, and structure  
-🟢 **LOCKED**
+1. MONOREPO OVERVIEW
 
----
+This repo contains two apps, one backend architecture.
 
-## Architecture & Stack Contract
+apps/
+  prooftimeline/     # Core product (chronology, ledger, storage)
+  evidencerooms/     # Due diligence UI (15 variables, deal room)
+packages/            # Optional shared code later
 
-### Core Rule
 
-**Vercel renders the dashboard UI. Railway runs the dashboard engine.**  
-MongoDB and storage are **never accessed directly from the browser**.
+Frontend: Vercel (UI only)
 
----
+Backend services: Railway (or similar)
 
-### Stack
+Database: MongoDB Atlas
 
-#### Vercel — Frontend
-- Hosts:
-  - `www.prooftimeline.com` (marketing)
-  - `app.prooftimeline.com` (dashboard UI)
-- Responsibilities:
-  - Render UI (Cases, Timeline, Export)
-  - Authentication UX
-  - Call backend APIs
-- Must NOT:
-  - Access MongoDB directly
-  - Store evidence binaries
+Storage: Cloudflare R2 (S3 compatible)
 
-#### Railway — Backend
-- Hosts backend services (recommended: `api.prooftimeline.com`)
-- Responsibilities:
-  - API routes (cases, events, timeline, uploads, export)
-  - Evidence ingestion:
-    - `sha256`
-    - `capturedAt`
-    - ledger sequencing + hash chain
-  - Upload binaries to object storage
-  - Persist metadata in MongoDB
+Embeddings: Voyage (preferred)
 
-#### MongoDB Atlas
-- Stores:
-  - Users, Cases, Events
-  - Evidence metadata + ledger chain
-  - Storage references (bucket/key/provider)
-- Does NOT store binaries
+Parsing / LLM: OpenAI
 
-#### Cloudflare
-- DNS + TLS
-- WAF / rate limiting
-- Optional R2 object storage (S3-compatible)
+2. ENVIRONMENT VARIABLES (AUTHORITATIVE)
 
-#### OpenAI (Optional / Deferred)
-- Assistive layer only (search, summarisation)
-- **Not required for V1 GTM**
+These must exist in all backend services.
 
----
+MongoDB
+MONGODB_URI=
 
-### Upload Flow (NON-NEGOTIABLE)
+Storage (Cloudflare R2 / S3-compatible)
+S3_BUCKET=
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
+S3_ENDPOINT=
+S3_REGION=
 
-Browser (Vercel)
-→ Railway API
-→ hash + ledger
-→ Object Storage (R2 / S3)
-→ MongoDB (metadata only)
+LLM / Embeddings
+OPENAI_API_KEY=
+VOYAGE_API_KEY=
 
-yaml
-Copy code
+Auth (depending on implementation)
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=
 
-Upload time is **never treated as factual time**.
+3. MONGODB ATLAS — DATA MODEL (LOCKED)
+Database
 
----
+Use one database per environment:
 
-### Three Timelines Rule (LOCKED)
+prooftimelines_dev
 
-ProofTimeline maintains three distinct axes:
+prooftimelines_staging
 
-1. **Event Time** — when something happened (truth axis)  
-2. **Capture Time** — when evidence entered the system (system axis)  
-3. **Ledger Order** — immutable upload sequence (integrity axis)  
+prooftimelines_prod
 
-- Timeline ordering = `Event.date`
-- Evidence ordering = `ledger.sequenceNumber`
+3.1 dossiers
 
----
+Represents a deal / case container.
 
-## GTM Readiness Checklist (Daily, Cross-Referenced)
+{
+  _id,
+  name,
+  type: "due_diligence" | "timeline",
+  createdByUserId,
+  createdAt,
+  updatedAt,
+  status: "active" | "archived",
+
+  // EvidenceRooms only
+  decision?: "GO" | "NO_GO"  // MUST be explicitly set by user
+}
 
-> **GTM definition:**  
-> ProofTimeline is GTM-ready when you can  
-> **Upload evidence → see a timeline → export a defensible proof pack**
+3.2 files
 
----
+One record per uploaded file.
 
-### 1. Evidence Uploads (FOUNDATIONAL)
+{
+  _id,
+  dossierId,
+  filename,
+  contentType,
+  sizeBytes,
 
-**GTM requires**
-- Upload files  
-- Hash evidence (immutability)  
-- Prevent duplicates  
-- Store metadata  
-- Link evidence → case → timeline  
+  storage: {
+    provider: "r2",
+    bucket,
+    key,
+    etag
+  },
 
-**Status**
-- ✅ `POST /api/cases/[caseId]/evidence`
-- ✅ SHA-256 hashing
-- ✅ Duplicate detection (hash-based)
-- ✅ Storage abstraction layer
-- ⚠️ Storage is local/dev only
+  processingStatus: "queued" | "parsing" | "parsed" | "failed",
+  error?: string,
 
-**Verdict**  
-🟡 Functionally complete — **production storage pending**
+  uploadedAt
+}
 
----
+3.3 file_pages (PDFs strongly recommended)
 
-### 2. Visual Timelines (CRITICAL)
+Page-level traceability.
 
-**GTM requires**
-- Ordered timeline by Event Time  
-- Events aligned to evidence  
-- Clear T0–T4 model  
-- API usable by frontend timeline UI  
+{
+  _id,
+  dossierId,
+  fileId,
+  pageNumber,
+  text,
+  hash,
+  tokens?
+}
 
-**Status**
-- ✅ `GET /api/cases/[caseId]/timeline`
-- ✅ Event ordering logic
-- ✅ Clean Timeline DTO
-- 🟡 Frontend timeline UI scaffolded (REM-style nav + TimelineView)
+3.4 chunks (VECTOR SEARCH UNIT)
 
-**Verdict**  
-🟡 Backend ready — **frontend refinement ongoing**
+This is the atomic retrieval object.
 
----
+{
+  _id,
+  dossierId,
+  fileId,
+  pageNumber?,      // page / slide / sheet row reference
+  chunkIndex,
 
-### 3. Export Packs (NON-NEGOTIABLE)
+  text,
+  charStart?,
+  charEnd?,
 
-**GTM requires**
-- Export case as:
-  - JSON (minimum)
-  - PDF / ZIP later
-- Include:
-  - Case context
-  - Timeline
-  - Evidence metadata
-  - Hash chain
+  provenance: {
+    sourceLabel,    // "Contract.pdf p.12"
+    quote           // short verbatim excerpt
+  },
 
-**Status**
-- ❌ No `/export` API yet
-- ❌ No pack assembler
-- ❌ No audit envelope
+  embedding: number[],     // OR Atlas-managed vector
+  embeddingModel,          // "voyage-3-large" etc
+  createdAt
+}
 
-**Verdict**  
-🔴 **HARD BLOCKER FOR GTM**
+3.5 variables (EvidenceRooms core)
 
----
+Exactly 15 fixed variables.
+No more, no less.
 
-## Secondary (Optional for V1, Important for Sales)
+{
+  _id,
+  dossierId,
+  variableKey,     // enum of the 15
+  unit,
 
-### 4. Audit-Friendly Summaries
+  status: "GREEN" | "AMBER" | "RED" | "NOT_FOUND",
 
-**GTM requires**
-- Human-readable case summary
-- Clear alignment changes
-- Plain-English narrative (“what changed, when”)
+  primaryValue,
 
-**Status**
-- ❌ Not implemented
-- ❌ No summarisation layer
+  candidates: [
+    {
+      value,
+      unit,
+      fileId,
+      pageNumber,
+      chunkId,
+      quote
+    }
+  ],
 
-**Verdict**  
-🟡 Not required for MVP demo — required for enterprise GTM
+  updatedAt
+}
 
----
+4. ATLAS VECTOR SEARCH
 
-### 5. Similarity / Contradiction Views
+Collection: chunks
 
-**Status**
-- ❌ Not implemented
-- ❌ No vector search
+Field: embedding
 
-**Verdict**  
-⚪ Explicitly deferred — acceptable
+Similarity: cosine
 
----
+Dimensions: must match embedding model
 
-## Platform & Infrastructure
+Filterable fields:
 
-### Authentication
-- 🟡 NextAuth partially wired
-- ⚠️ Dev auth fallback in place
+dossierId
 
-**Verdict**  
-🟡 Demo-ready — not production-ready
+fileId
 
----
+pageNumber
 
-### Case Management
-- ✅ `POST /api/cases`
-- ✅ `GET /api/cases`
-- ✅ User isolation enforced
+Embeddings are retrieval only, never interpretation.
 
-**Verdict**  
-🟢 READY
+5. INGESTION PIPELINE (END-TO-END)
+Step 0 — Upload
 
----
+Frontend uploads file
 
-### Events (Claims Over Time)
-- ✅ `POST /api/cases/[caseId]/events`
-- ✅ `GET /api/cases/[caseId]/events`
-- ✅ Evidence references supported
+Backend streams to R2
 
-**Verdict**  
-🟢 READY
+Create files record (queued)
 
----
+Step 1 — Parsing (by file type)
+PDFs
 
-### Mongo / Data Layer
-- ✅ MongoDB connected
-- ✅ Health checks
-- ⚠️ No indexes
-- ⚠️ No migrations
+Two-tier strategy:
 
-**Verdict**  
-🟡 Production hardening needed
+Attempt local parse:
 
----
+pdf-parse or pdfjs-dist
 
-## Deployment / Ops
+If text quality is poor:
 
-### CI / Deployment
-- ❌ Railway build unstable
-- ❌ Production env vars incomplete
-- ❌ Auth dependency mismatch
+Send PDF to OpenAI
 
-**Verdict**  
-🔴 **HARD BLOCKER**
+Request page-level extracted text JSON
 
----
+Store output in file_pages.
 
-## GTM Readiness Scorecard
+DOCX
 
-| Area | Status |
-|---|---|
-| Evidence Uploads | 🟡 |
-| Timeline API | 🟡 |
-| Export Packs | 🔴 |
-| Audit Summaries | ⚪ |
-| Similarity Views | ⚪ |
-| Auth | 🟡 |
-| Deployment | 🔴 |
+Use mammoth
 
----
+Preserve paragraph structure
 
-## 🚨 HARD GTM BLOCKERS (MUST FIX)
+CSV
 
-1. **Export Pack API**
-   - `/api/cases/[caseId]/export`
-   - Deterministic payload
-   - Hash-verified
+Use papaparse
 
-2. **Production Storage**
-   - R2 / S3 / GCS
-   - Signed URLs
+Convert to text blocks
 
-3. **Deployment Stability**
-   - Green Railway build
-   - Auth dependency alignment
+Preserve headers
 
----
+XLS / XLSX
 
-## Philosophy (LOCKED)
+Use xlsx (SheetJS)
 
-ProofTimeline is not about being right.  
-It is about **showing when things stop matching over time**.
+Convert each sheet to structured text
 
+Preserve cell references (A1 etc)
+
+PPT / PPTX
+
+Extract slide titles, bullet text, speaker notes
+
+Preserve slide numbers
+
+Do not rely on OpenAI to “read PPTs”
+
+Audio / Video (optional)
+
+Use OpenAI Speech-to-Text (Whisper)
+
+Store transcript like any other document
+
+Step 2 — Chunking
+
+Chunk size: ~800–1500 chars
+
+Always attach provenance
+
+Insert into chunks
+
+Step 3 — Embeddings
+
+Use Voyage embeddings (preferred)
+
+Store model name + version
+
+Write vector to Atlas
+
+6. VARIABLE EXTRACTION (EvidenceRooms)
+
+This is not analysis, only extraction.
+
+Process per variable:
+
+Vector search relevant chunks
+
+Run constrained extraction prompt
+
+Output JSON only:
+
+value
+
+unit
+
+citations
+
+Store in variables.candidates
+
+Compute status deterministically
+
+Decision (GO / NO_GO) is NEVER inferred.
+
+7. DEAL ROOM (READ-ONLY)
+Archive
+
+Numeric filters only
+
+Example:
+
+NetDebt / EBITDA > 4
+
+Return dossier list
+
+Compare (2–5 dossiers)
+
+Rows = variables
+
+Columns = dossiers
+
+Missing = Not Found
+
+No charts, no scoring
+
+Committee
+
+Read-only
+
+Sort / filter
+
+Export XLSX / PDF
+
+8. BACKEND ENDPOINTS (MINIMUM)
+POST   /api/dossiers
+GET    /api/dossiers
+GET    /api/dossiers/:id
+
+POST   /api/files/upload
+POST   /api/files/:id/process
+
+GET    /api/dossiers/:id/variables
+GET    /api/dossiers/:id/evidence-map
+
+POST   /api/dossiers/compare
+GET    /api/dossiers/search
+
+POST   /api/exports/compare
+
+9. DEPLOYMENT MODEL
+
+Frontend: Vercel
+
+apps/prooftimeline
+
+apps/evidencerooms
+
+Backend workers: Railway
+
+DB: MongoDB Atlas
+
+Storage: Cloudflare R2
+
+10. ENGINEERING PRIORITY (ORDER)
+
+Upload → R2 → Mongo record
+
+Parsing per file type
+
+Chunking
+
+Embeddings + vector search
+
+Variable extraction
+
+Deal Room endpoints
+
+Export
+
+11. FINAL NOTE TO ZACH
+
+This system is designed to be:
+
+boring
+
+calm
+
+defensible
+
+explainable to lawyers and committees
+
+If it ever feels “clever”, stop and reassess.
